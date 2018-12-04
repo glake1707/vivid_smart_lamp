@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+	<name>vivid_smart_lamp</name>
+	<comment></comment>
+	<projects>
+	</projects>
+	<buildSpec>
+		<buildCommand>
+			<name>org.eclipse.cdt.managedbuilder.core.genmakebuilder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+		<buildCommand>
+			<name>org.eclipse.cdt.managedbuilder.core.ScannerConfigBuilder</name>
+			<triggers>full,incremental,</triggers>
+			<arguments>
+			</arguments>
+		</buildCommand>
+	</buildSpec>
+	<natures>
+		<nature>com.ti.ccstudio.core.ccsNature</nature>
+		<nature>org.eclipse.cdt.core.cnature</nature>
+		<nature>org.eclipse.cdt.managedbuilder.core.managedBuildNature</nature>
+		<nature>org.eclipse.cdt.core.ccnature</nature>
+		<nature>org.eclipse.cdt.managedbuilder.core.ScannerConfigNature</nature>
+	</natures>
+	<linkedResources>
+		<link>
+			<name>OrbitOLED</name>
+			<type>2</type>
+			<location>C:/Users/Gabriel/Desktop/vivid_smart_lamp/source_code/OrbitOLED</location>
+		</link>
+		<link>
+			<name>core_cm4.h</name>
+			<type>1</type>
+			<locationURI>PARENT-2-PROJECT_LOC/Desktop/vivid_smart_lamp/CMSIS_5-5.4.0/CMSIS/Core/Include/core_cm4.h</locationURI>
+		</link>
+		<link>
+			<name>ustdlib.c</name>
+			<type>1</type>
+			<locationURI>PARENT-2-PROJECT_LOC/Desktop/vivid_smart_lamp/source_code/ustdlib.c</locationURI>
+		</link>
+	</linkedResources>
+</projectDescription>
