@@ -30,7 +30,7 @@
 #include "arm_const_structs.h"
 
 //Macros-----------------------------------------------------------------------------------------------------------
-#define ADC_SAMPLE_RATE 16000
+#define ADC_SAMPLE_RATE 256
 #define N 256
 
 
@@ -89,7 +89,7 @@ void initADC() {
     // conversion using sequence 3 we will only configure step 0.  For more
     // on the ADC sequences and steps, refer to the LM3S1968 datasheet.
     //CH9 corresponds to AIN9, CH0 corresponds to AIN0 etc...
-    ADCSequenceStepConfigure(ADC0_BASE, 3, 0, ADC_CTL_CH1 | ADC_CTL_IE |
+    ADCSequenceStepConfigure(ADC0_BASE, 3, 0, ADC_CTL_CH9 | ADC_CTL_IE |
                              ADC_CTL_END);
     //Ch1 = AIN1 = PE2 pin 7
     //CH9 = AIN9 = potentiometer
@@ -136,19 +136,18 @@ void ADCIntHandler() {
     // inc/hw_memmap.h
 
     ADCSequenceDataGet(ADC0_BASE, 3, singleADCSample);
-    N_ADC_samples[sample_count++] = (float32_t)(*singleADCSample);
+    float32_t data = (singleADCSample[0]);
+    N_ADC_samples[sample_count] = data;
+    sample_count++;
+
+
+    if (sample_count == 256) {
+        sample_count = 0;
+        IntDisable(INT_ADC0SS0);
+       // IntMasterDisable();
+    }
     // Clean up, clearing the interrupt
     ADCIntClear(ADC0_BASE, 3);
-
-    if (sample_count == (N-1)) {
-        sample_count = 0;
-       // IntDisable(INT_ADC0SS0);
-        IntMasterDisable();
-    }
-
-
-    // Place it in the circular buffer (advancing write index)
-   // writeCircBuf (&g_inBuffer, ulValue);
 
 
 }
@@ -191,6 +190,7 @@ void main(void) {
 
     //initialise variables
     char stringF[17];
+    char stringG[17];
     uint32_t fftSize = 256;
     uint32_t doBitReverse = 1;
     uint32_t ifftFlag = 0;
@@ -204,29 +204,32 @@ void main(void) {
         //background tasks
 
         //FFT computation Block---------------------------------------------------------------------------------
-        if (sample_count == 0) {
-
+        if (!IntIsEnabled(INT_ADC0SS0)) {
+            //try not doing bit reverse and see if output is not NaN
             arm_cfft_f32(&arm_cfft_sR_f32_len256, N_ADC_samples, ifftFlag, doBitReverse);
             arm_cmplx_mag_f32(N_ADC_samples, FFTOutput, fftSize);
-            //arm_max_f32(FFTOutput, fftSize, &maxValue, &testIndex);
+           // arm_max_f32(FFTOutput, fftSize, &maxValue, &testIndex);
             avgFreq = average(FFTOutput);
-            average_frequency = avgFreq;
+            average_frequency= avgFreq;
 
             //debugging prints----------------------------------------------------------
-            OLEDStringDraw("testing ADC", 0, 0);
             usnprintf(stringF, sizeof(stringF), "ADC samp: %4d", singleADCSample[0]);
+            usnprintf(stringG, sizeof(stringG), "Avg Freq: %4d", average_frequency);
+            OLEDStringDraw("testing ADC", 0, 0);
+
             OLEDStringDraw(stringF, 0, 1);
             OLEDStringDraw("testing FFT", 0, 2);
-            usnprintf(stringF, sizeof(stringF), "Avg Freq: %4d", average_frequency);
-            OLEDStringDraw(stringF, 0, 3);
+
+            OLEDStringDraw(stringG, 0, 3);
 
             //--------------------------------------------------------------------------
-            IntMasterEnable();
+
+            IntEnable(INT_ADC0SS0);
         }
         //-----------------------------------------------------------------------------------------------------
+       // SysCtlDelay(66666); //delay 1/100 sec
 
 
-        SysCtlDelay(66666); //delay 1/100 sec
     }
 
 }
