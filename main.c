@@ -30,7 +30,7 @@
 #include "arm_const_structs.h"
 
 //Macros-----------------------------------------------------------------------------------------------------------
-#define ADC_SAMPLE_RATE 256
+#define ADC_SAMPLE_RATE 4096
 #define N 256
 
 
@@ -38,9 +38,10 @@
 //Global Variables------------------------------------------------------------------------------------------------
 static uint32_t singleADCSample[1];
 static float32_t N_ADC_samples[N];
-static float32_t FFTOutput[N/2];
+static float32_t FFTOutput[N];
 static uint32_t sample_count = 0;
-
+arm_rfft_fast_instance_f32 S;
+uint32_t numSamples = 256;
 
 //----------------------------------------------------------------------------------------------------------------
 //function prototypes---------------------------------------------------------------------------------------------
@@ -89,7 +90,7 @@ void initADC() {
     // conversion using sequence 3 we will only configure step 0.  For more
     // on the ADC sequences and steps, refer to the LM3S1968 datasheet.
     //CH9 corresponds to AIN9, CH0 corresponds to AIN0 etc...
-    ADCSequenceStepConfigure(ADC0_BASE, 3, 0, ADC_CTL_CH9 | ADC_CTL_IE |
+    ADCSequenceStepConfigure(ADC0_BASE, 3, 0, ADC_CTL_CH1 | ADC_CTL_IE |
                              ADC_CTL_END);
     //Ch1 = AIN1 = PE2 pin 7
     //CH9 = AIN9 = potentiometer
@@ -157,6 +158,7 @@ void initialisations() {
     initClock();
     initADC();
     initSysTickClock();
+    pwmInit();
 }
 
 void debugLCD(char *s) {
@@ -198,6 +200,9 @@ void main(void) {
     float32_t avgFreq = 0.0;
     float32_t maxValue;
     uint32_t testIndex;
+  //  arm_rfft_fast_init_f32(&S, numSamples);
+
+
 
 
     while (1) {
@@ -206,29 +211,44 @@ void main(void) {
         //FFT computation Block---------------------------------------------------------------------------------
         if (!IntIsEnabled(INT_ADC0SS0)) {
             //try not doing bit reverse and see if output is not NaN
-            arm_cfft_f32(&arm_cfft_sR_f32_len256, N_ADC_samples, ifftFlag, doBitReverse);
-            arm_cmplx_mag_f32(N_ADC_samples, FFTOutput, fftSize);
+//            arm_rfft_fast_f32(&S, N_ADC_samples,FFTOutput , ifftFlag);
+//            arm_cmplx_mag_f32(FFTOutput, FFTOutput, fftSize);
            // arm_max_f32(FFTOutput, fftSize, &maxValue, &testIndex);
-            avgFreq = average(FFTOutput);
-            average_frequency= avgFreq;
+//            avgFreq = average(FFTOutput);
+//            average_frequency= avgFreq;
 
             //debugging prints----------------------------------------------------------
-            usnprintf(stringF, sizeof(stringF), "ADC samp: %4d", singleADCSample[0]);
-            usnprintf(stringG, sizeof(stringG), "Avg Freq: %4d", average_frequency);
-            OLEDStringDraw("testing ADC", 0, 0);
+//            usnprintf(stringF, sizeof(stringF), "ADC samp: %4d", singleADCSample[0]);
+//            usnprintf(stringG, sizeof(stringG), "Avg Freq: %4d", average_frequency);
+//            OLEDStringDraw("testing ADC", 0, 0);
 
-            OLEDStringDraw(stringF, 0, 1);
-            OLEDStringDraw("testing FFT", 0, 2);
+//            OLEDStringDraw(stringF, 0, 1);
+//            OLEDStringDraw("testing FFT", 0, 2);
 
-            OLEDStringDraw(stringG, 0, 3);
+//            OLEDStringDraw(stringG, 0, 3);
 
             //--------------------------------------------------------------------------
+            //pwm function test - display duty cyle and test with oscilloscope
 
             IntEnable(INT_ADC0SS0);
+            while(1) // LED Test
+            {
+                uint32_t rgb[3] = {0};
+                uint32_t i;
+                uint32_t val;
+                for (i = 100; i <= 10000; i=i*1.01)
+                {
+                    val = linear(i);
+                    decode(val, rgb);
+                    setDutyCycles(rgb);
+                    SysCtlDelay(66666);
+                }
+            }
         }
         //-----------------------------------------------------------------------------------------------------
        // SysCtlDelay(66666); //delay 1/100 sec
 
+        /*Cycle LED Colors*/
 
     }
 
