@@ -13,19 +13,21 @@
 
 //macros------------------------------------------------------------------------------------------
 #define PWM_FREQUENCY 400
-#define min_freq 300
-#define max_freq 3400
+#define min_freq 10
+#define max_freq 800
 #define Red 99
 #define RtoB 0.99
 #define BtoG .32
-#define GtoY .26
+#define GtoY .20
 #define YtoW .36
 #define dutyCycleStep 1
 #define color_num 99/dutyCycleStep*6
 
 //prototypes-----------------------------------------------------------------------------------------
 void pwmInit(void);
-
+uint32_t linear(uint32_t freq);
+void decode(int32_t val, int32_t *rgb);
+void setDutyCycles(uint32_t *rgb);
 
 //------------------------------------------------------------------------------------------------
 //global variables-----------------------------------------------------------------------------
@@ -288,5 +290,22 @@ void pwmInit1(void) {
 
 
 }
+//LED test run in the main
+/*
+while(1) // LED Test
+{
+    uint32_t rgb[3] = {0};
+    uint32_t i;
+    uint32_t val;
+    for (i = 100; i <= 10000; i=i*1.01)
+    {
+        val = linear(i);
+        decode(val, rgb);
+        setDutyCycles(rgb);
+        SysCtlDelay(66666);
+    }
+
+}
+} */
 
 

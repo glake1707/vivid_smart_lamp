@@ -31,9 +31,24 @@
 			<location>C:/Users/Gabriel/Desktop/vivid_smart_lamp/source_code/OrbitOLED</location>
 		</link>
 		<link>
+			<name>arm_fft_bin_example_f32.c</name>
+			<type>1</type>
+			<locationURI>PARENT-2-PROJECT_LOC/Desktop/vivid_smart_lamp/CMSIS_5-5.4.0/CMSIS/DSP/Examples/ARM/arm_fft_bin_example/arm_fft_bin_example_f32.c</locationURI>
+		</link>
+		<link>
 			<name>core_cm4.h</name>
 			<type>1</type>
 			<locationURI>PARENT-2-PROJECT_LOC/Desktop/vivid_smart_lamp/CMSIS_5-5.4.0/CMSIS/Core/Include/core_cm4.h</locationURI>
+		</link>
+		<link>
+			<name>fix_fft.c</name>
+			<type>1</type>
+			<locationURI>PARENT-2-PROJECT_LOC/Desktop/vivid_smart_lamp/fix_fft/fix_fft_dir/fix_fft.c</locationURI>
+		</link>
+		<link>
+			<name>fix_fft.h</name>
+			<type>1</type>
+			<locationURI>PARENT-2-PROJECT_LOC/Desktop/vivid_smart_lamp/fix_fft/fix_fft_dir/fix_fft.h</locationURI>
 		</link>
 		<link>
 			<name>ustdlib.c</name>
