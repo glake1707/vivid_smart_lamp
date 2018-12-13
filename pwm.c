@@ -13,15 +13,6 @@
 
 //macros------------------------------------------------------------------------------------------
 #define PWM_FREQUENCY 400
-#define min_freq 10
-#define max_freq 800
-#define Red 99
-#define RtoB 0.99
-#define BtoG .32
-#define GtoY .20
-#define YtoW .36
-#define dutyCycleStep 1
-#define color_num 99/dutyCycleStep*6
 
 //prototypes-----------------------------------------------------------------------------------------
 void pwmInit(void);
@@ -114,107 +105,6 @@ void pwmInit(void) {
 
     PWMGenEnable(PWM0_BASE, PWM_GEN_2);
 }
-
-uint32_t linear(uint32_t freq)
-{
-    double scalar = (color_num - 1) / ((log10(max_freq) - log10(2)) - (log10(min_freq) - log10(2)));
-    if (freq < min_freq) // Apply frequency floor
-    {
-        freq = min_freq;
-    }
-    else if (freq > max_freq) // Apply frequency ceiling
-    {
-        freq = max_freq;
-    }
-
-    double unscaled = log10(freq)-log10(2);
-    uint32_t scaled = (uint32_t) ((unscaled - (log10(min_freq) - log10(2))) * scalar);
-    return scaled;
-}
-
-
-void decode(int32_t val, int32_t *rgb)
-{
-    int32_t maxVal = 99/dutyCycleStep*dutyCycleStep;
-    int32_t subRange = color_num / 6;
-    if (val <= subRange) // Red to Purple
-    {
-        val = val;
-        rgb[0] = Red;
-        rgb[1] = dutyCycleStep;
-        rgb[2] = ceil((double) val / subRange * 100 * RtoB);
-    }
-    else if (val <= 2 * subRange) // Purple to Blue
-    {
-        val = val - subRange - 1;
-        rgb[0] = maxVal - (double) val / subRange * 99;
-        rgb[1] = dutyCycleStep;
-        rgb[2] = RtoB * 100;
-    }
-    else if (val <= 3 * subRange) // Blue to Teal
-    {
-        val = val - 2 * subRange;
-        rgb[0] = dutyCycleStep;
-        rgb[1] = ceil((double) val / subRange * 100 * BtoG);
-        rgb[2] = 99;
-    }
-    else if (val <= 4 * subRange) // Teal to Green
-    {
-        val = val - 3 * subRange - 1;
-        rgb[0] = dutyCycleStep;
-        rgb[1] = BtoG * 100 - (double) val / subRange * 6;
-        rgb[2] = maxVal - (double) val / subRange * 99;
-    }
-    else if (val <= 5 * subRange) // Green to Yellow
-    {
-        val = val - 4 * subRange;
-        rgb[0] = ceil((double) val / subRange * 100 * RtoB);
-        rgb[1] = GtoY * 100;
-        rgb[2] = dutyCycleStep;
-    }
-    else // Yellow to White
-    {
-        val = val - 5 * subRange;
-        rgb[0] = 99;
-        rgb[1] = GtoY * 100;
-        rgb[2] = ceil((double) val / subRange * 100 * YtoW);
-    }
-    rgb[0] = rgb[0] / dutyCycleStep * dutyCycleStep;
-    rgb[1] = rgb[1] / dutyCycleStep * dutyCycleStep;
-    rgb[2] = rgb[2] / dutyCycleStep * dutyCycleStep;
-    if (rgb[0] == 0)
-    {
-        rgb[0] = dutyCycleStep;
-    }
-    if (rgb[1] == 0)
-    {
-        rgb[1] = dutyCycleStep;
-    }
-    if (rgb[2] == 0)
-    {
-        rgb[2] = dutyCycleStep;
-    }
-}
-
-
-void setDutyCycles(uint32_t *rgb)
-{
-    PWMPulseWidthSet(PWM0_BASE, PWM_OUT_2, ceil((uint32_t)((double)rgb[2] / 100 * 30000))); //blue
-    PWMPulseWidthSet(PWM0_BASE, PWM_OUT_3, ceil((uint32_t)((double)rgb[1] / 100 * 30000))); //green
-    PWMPulseWidthSet(PWM0_BASE, PWM_OUT_4, ceil((uint32_t)((double)rgb[0] / 100 * 30000))); //red
-}
-
-
-
-
-
-
-
-
-
-
-
-
 
 void pwmInit1(void) {
 

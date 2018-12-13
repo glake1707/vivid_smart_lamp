@@ -131,7 +131,7 @@
 						</tool>
 					</fileInfo>
 					<sourceEntries>
-						<entry excluding="main_fft.c|arm_fft_bin_example_f32.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="main.c|arm_fft_bin_example_f32.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
