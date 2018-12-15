@@ -1,9 +1,17 @@
 
-/**
- * main.c
- * current purpose: use the ADC to sample the analog signal from the potentiometer and compute the FFT of the signal
- * and output the frequency of the pot signal on the OLED display.
- */
+/******************************************************************************************************************
+ *   main.c, contains all functions and foreground/background task code.                                          *
+ *   Project Tasks Overview:                                                                                      *
+ *   1. sample an audio signal from a sound sensor                                                                *
+ *   2. clean the data and compute the integer FFT                                                                *
+ *   3. Find the peak frequency from the sudio signal                                                             *
+ *   4. scale the frequency to a linear color spectrum                                                            *
+ *   5. compute the rgb value for the LED                                                                         *
+ *   6. set the Duty Cycle of the PWM outputs to the LED RGB pins for desired color                               *
+ *                                                                                                                *
+ ******************************************************************************************************************/
+
+
 //Included libraries-----------------------------------------------------------------------------------------------
 #include <stdint.h>
 #include <stdbool.h>
@@ -29,12 +37,13 @@
 #include "arm_const_structs.h"
 
 //Macros-----------------------------------------------------------------------------------------------------------
-#define ADC_SAMPLE_RATE 4096
+#define ADC_SAMPLE_RATE 7000
 #define N 256
 #define log2N 8
+#define PWM_FREQUENCY 400
 
-#define min_freq 100
-#define max_freq 2048
+#define min_freq 200
+#define max_freq 3400
 #define Red 99
 #define RtoB 0.99
 #define BtoG .32
@@ -47,6 +56,8 @@
 //Global Variables------------------------------------------------------------------------------------------------
 static uint32_t singleADCSample[1];
 static uint32_t sample_count = 0;
+uint32_t ui8Adjust = 440;
+uint32_t ui32Period;
 
 // variables for FFT----------------
 short real[N];
@@ -59,20 +70,26 @@ void initADC();
 void initSysTickClock();
 void ADCIntHandler();
 void SysTickIntHandler();
-void debugLCD(char *s);
-//double average;
 void pwmInit();
+int fix_fft(short fr[], short fi[], short m, short inverse);
+uint32_t linear(uint32_t freq);
+void decode(uint32_t val, uint32_t *rgb);
+void setDutyCycles(uint32_t *rgb);
 
 //----------------------------------------------------------------------------------------------------------------
-//helper functions------------------------------------------------------------------------------------------------
+
+
+/**********************************************************************************************
+ *                             BEGIN FUNCTION CODE                                            *
+ **********************************************************************************************/
 
 void initClock() {
 
     //initialize system clock--------------------------------------------------------------------
-    // Set up the system clock (refer to pp.220 of the TM4C123 datasheet for an overview).
-    // Many options exist here but basically the 16MHz crystal oscillator signal is
-    // boosted to 400Mz via a phase-locked loop (PLL), divided by 2 and then again by 10
-    // (via the SYSCTL_SYSDIV_10 setting) to make the system clock rate 20 MHz.
+    // Set up the system clock (p.220 of the TM4C123 datasheet).
+    // The 16MHz crystal oscillator signal is
+    // boosted to 400Mz via a phase-locked loop, divided by 2 and then again by 10
+    // (the SYSCTL_SYSDIV_10 setting) to make the system clock rate 20 MHz.
     SysCtlClockSet(SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ | SYSCTL_SYSDIV_10);
 
     SysCtlDelay(100);  // Allow time for the oscillator to settle down.
@@ -80,45 +97,63 @@ void initClock() {
     //   times specified by the argument).
 }
 
+
+
 void initADC() {
-    // The ADC0 peripheral must be enabled for configuration and use.
+
+    // The ADC0 peripheral is enabled for configuration and use.
+
     SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0);
+
+
+    //wait for it to be ready
+
+    while(!SysCtlPeripheralReady(SYSCTL_PERIPH_ADC0));
+
+
 
     // Enable sample sequence 3 with a processor signal trigger.  Sequence 3
     // will do a single sample when the processor sends a signal to start the
     // conversion.
 
-    while(!SysCtlPeripheralReady(SYSCTL_PERIPH_ADC0));
-
     ADCSequenceConfigure(ADC0_BASE, 3, ADC_TRIGGER_PROCESSOR, 0);
 
-    //
-    // Configure step 0 on sequence 3.  Sample channel 0 (ADC_CTL_CH0) in
+
+
+    // Configure step 0 on sequence 3.  Sample channel 0 (ADC_CTL_CH1) in
     // single-ended mode (default) and configure the interrupt flag
     // (ADC_CTL_IE) to be set when the sample is done.  Tell the ADC logic
     // that this is the last conversion on sequence 3 (ADC_CTL_END).  Sequence
     // 3 has only one programmable step.  Sequence 1 and 2 have 4 steps, and
     // sequence 0 has 8 programmable steps.  Since we are only doing a single
-    // conversion using sequence 3 we will only configure step 0.  For more
-    // on the ADC sequences and steps, refer to the LM3S1968 datasheet.
+    // conversion using sequence 3 we will only configure step 0.
     //CH9 corresponds to AIN9, CH0 corresponds to AIN0 etc...
+    //Ch1 = AIN1 = PE2 pin 7
+
     ADCSequenceStepConfigure(ADC0_BASE, 3, 0, ADC_CTL_CH1 | ADC_CTL_IE |
                              ADC_CTL_END);
-    //Ch1 = AIN1 = PE2 pin 7
-    //CH9 = AIN9 = potentiometer
 
-    //
+
+
     // Since sample sequence 3 is now configured, it must be enabled.
+
     ADCSequenceEnable(ADC0_BASE, 3);
 
-    //
+
+
     // Register the interrupt handler
+
     ADCIntRegister (ADC0_BASE, 3, ADCIntHandler);
 
-    //
+
+
     // Enable interrupts for ADC0 sequence 3 (clears any outstanding interrupts)
+
     ADCIntEnable(ADC0_BASE, 3);
+
 }
+
+
 
 void initSysTickClock() {
     //initialize the clock for timed interrupts
@@ -134,24 +169,90 @@ void initSysTickClock() {
        SysTickEnable();
 }
 
+void pwmInit(void) {
+
+    SysCtlPeripheralReset (SYSCTL_PERIPH_PWM0);
+
+    SysCtlPeripheralReset (SYSCTL_PERIPH_GPIOB);
+
+    SysCtlPeripheralReset (SYSCTL_PERIPH_GPIOE);
+
+
+
+    SysCtlPWMClockSet(SYSCTL_PWMDIV_1);
+
+
+
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM0);
+
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
+
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
+
+
+
+    GPIOPinConfigure(GPIO_PB4_M0PWM2);
+
+    GPIOPinConfigure(GPIO_PB5_M0PWM3);
+
+    GPIOPinConfigure(GPIO_PE4_M0PWM4);
+
+
+
+    GPIOPinTypePWM(GPIO_PORTB_BASE,(GPIO_PIN_4 | GPIO_PIN_5));
+
+    GPIOPinTypePWM(GPIO_PORTE_BASE, (GPIO_PIN_4));
+
+
+
+    PWMGenConfigure(PWM0_BASE, PWM_GEN_1, (PWM_GEN_MODE_DOWN| PWM_GEN_MODE_NO_SYNC));
+
+    PWMGenConfigure(PWM0_BASE, PWM_GEN_2, (PWM_GEN_MODE_DOWN| PWM_GEN_MODE_NO_SYNC));
+
+
+
+    PWMGenPeriodSet(PWM0_BASE, PWM_GEN_1, 30000);
+
+    PWMGenPeriodSet(PWM0_BASE, PWM_GEN_2, 30000);
+
+
+
+    PWMPulseWidthSet(PWM0_BASE, PWM_OUT_2, 20000);     //duty cycle is 33%.
+
+    PWMPulseWidthSet(PWM0_BASE, PWM_OUT_3, 20000);
+
+    PWMPulseWidthSet(PWM0_BASE, PWM_OUT_4, 20000);       //duty cycle is 16%.
+
+
+
+    PWMOutputState(PWM0_BASE, PWM_OUT_2_BIT | PWM_OUT_3_BIT | PWM_OUT_4_BIT,   true);
+
+
+
+    PWMGenEnable(PWM0_BASE, PWM_GEN_1);
+
+    PWMGenEnable(PWM0_BASE, PWM_GEN_2);
+}
+
+
 void SysTickIntHandler() {
 
     //trigger an ADC interrupt to generate one sample
     ADCProcessorTrigger(ADC0_BASE, 3);
 
+    //wait for interrupt to be ready
     while(!ADCIntStatus(ADC0_BASE, 3, false));
 }
 
-void ADCIntHandler() {
-    //uint32_t ulValue;
 
-    //
-    // Get the single sample from ADC0.  ADC_BASE is defined in
-    // inc/hw_memmap.h
+
+void ADCIntHandler() {
+
+
+    // Get the single sample from ADC0.
 
     ADCSequenceDataGet(ADC0_BASE, 3, singleADCSample);
-  //  float32_t data = (singleADCSample[0]);
-  //  N_ADC_samples[sample_count] = data;
+
     if (sample_count >=N/2) {
         real[sample_count - N/2] = singleADCSample[0];
         if (real[sample_count - N/2] < 20)
@@ -168,11 +269,13 @@ void ADCIntHandler() {
         sample_count = 0;
         ADCIntClear(ADC0_BASE, 3);
         IntDisable(INT_ADC0SS0);
-       // IntMasterDisable();
     }
-    // Clean up, clearing the interrupt
+
+    //clearing the interrupt flag
     ADCIntClear(ADC0_BASE, 3);
 }
+
+
 
 uint32_t linear(uint32_t freq)
 {
@@ -190,6 +293,7 @@ uint32_t linear(uint32_t freq)
     uint32_t scaled = (uint32_t) ((unscaled - (log10(min_freq) - log10(2))) * scalar);
     return scaled;
 }
+
 
 
 void decode(uint32_t val, uint32_t *rgb)
@@ -256,12 +360,14 @@ void decode(uint32_t val, uint32_t *rgb)
 }
 
 
-void setDutyCycles(uint32_t *rgb)
-{
+
+void setDutyCycles(uint32_t *rgb) {
     PWMPulseWidthSet(PWM0_BASE, PWM_OUT_2, ceil((uint32_t)((double)rgb[2] / 100 * 30000))); //blue
     PWMPulseWidthSet(PWM0_BASE, PWM_OUT_3, ceil((uint32_t)((double)rgb[1] / 100 * 30000))); //green
     PWMPulseWidthSet(PWM0_BASE, PWM_OUT_4, ceil((uint32_t)((double)rgb[0] / 100 * 30000))); //red
 }
+
+
 
 void initialisations() {
     initClock();
@@ -270,56 +376,53 @@ void initialisations() {
     pwmInit();
 }
 
-
-/*float32_t average(float32_t *array) {
-    float32_t output = 0;
-    float32_t sum = 0;
-    uint32_t size = sizeof(array) / sizeof(array[0]);
-    uint32_t i;
-    for (i = 0; i < size; i++) {
-        sum +=array[i];
-    }
-    output = sum / size;
-    return output;
-}*/
-
-//------------------------------------------------------------------------------------------------------------------------
+/**********************************************************************************************
+ *                                 END OF FUNCTION CODE                                       *
+ **********************************************************************************************/
 
 
+
+
+
+/**********************************************************************************************
+ *                        MAIN FOR AUDIO FREQUENCY LED CONTROL                                *
+ **********************************************************************************************/
 
 void main(void) {
 
     //initialise peripherals and interrupts
+
     initialisations();
+
     IntMasterEnable();
 
 
+
     //Initialize variables
-    //char stringF[17];
-    //char stringG[17];
-    //uint32_t fftSize = 256;
-    //uint32_t doBitReverse = 1;
-    //uint32_t ifftFlag = 0;
-    //uint32_t average_frequency = 0;
-    //float32_t avgFreq = 0.0;
+
     uint32_t max;
+
     uint32_t index;
+
     uint32_t i;
+
     uint32_t peak_freq;
+
     long sum;
+
     double avg = 0.0;
+
     uint32_t input;
+
     uint32_t rgb[3] = {0};
- //   arm_rfft_fast_init_f32(&S, numSamples);
 
 
 
-
+    //background tasks
 
     while (1) {
-        //background tasks
 
-        //FFT computation Block---------------------------------------------------------------------------------
+        //FFT / RGB / PWM computation Block---------------------------------------------------------------------------------
         if (!IntIsEnabled(INT_ADC0SS0)) {
             //average real data array
             sum = 0;
@@ -346,6 +449,8 @@ void main(void) {
             for ( i = 0; i < N/2; i++) {
                 real[i] = (short) sqrt(real[i] * real[i] + imag[i] * imag[i]);
             }
+
+            //find the max power bin index
             max = 0;
             index = 0;
             for (i = 0; i < N/2; i++) {
@@ -354,17 +459,81 @@ void main(void) {
                     index = i;
                 }
             }
-            if (max < 10) {
+
+            if (max < 5) {
                 index = 1;
             }
+
             peak_freq = ((float32_t)index / (float32_t)N) * ADC_SAMPLE_RATE;
 
             input = linear(peak_freq);
             decode(input, rgb);
             setDutyCycles(rgb);
 
-            // Restart
+            // Restart sampling
             IntEnable(INT_ADC0SS0);
         }
     }
 }
+
+
+
+
+/**********************************************************************************************
+ *                        MAIN FOR AUDIO AMPLITUDE LED CONTROL                                *
+ **********************************************************************************************/
+/*
+void main(void) {
+
+    //initialise peripherals and interrupts
+
+    initialisations();
+
+    IntMasterEnable();
+
+
+
+    //Initialize variables
+
+    uint32_t i;
+
+    uint32_t sum;
+
+    double avg = 0.0;
+
+    double doublesum;
+
+    uint32_t input;
+
+    uint32_t rgb[3] = {0};
+
+
+
+    //background tasks
+
+    while (1) {
+
+        //RGB and PWM computation Block---------------------------------------------------------------------------------
+        if (!IntIsEnabled(INT_ADC0SS0)) {
+            //average real data array
+            sum = 0;
+            avg = 0;
+            for (i = 0; i < N/2; i++) {
+                sum += real[i];
+            }
+            doublesum = (double) sum;
+            avg = doublesum / 8.0;
+            input = ceil(avg / 1100.0 * 593.0 + 1.0);
+            input = linear(input);
+            decode(input, rgb);
+            setDutyCycles(rgb);
+        //-----------------------------------------------------------------------------------------------------
+
+            IntEnable(INT_ADC0SS0);
+
+        }
+
+    }
+}
+
+*/

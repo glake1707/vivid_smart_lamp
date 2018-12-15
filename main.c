@@ -38,38 +38,13 @@
 //------------------------------------------------------------------------------------------------------------------
 //Global Variables------------------------------------------------------------------------------------------------
 static uint32_t singleADCSample[1];
-
 static uint32_t sample_count = 0;
 arm_rfft_fast_instance_f32 S;
 uint32_t numSamples = 256;
-// variables for FFT----------------
-
-//attemp1/2
-double N_ADC_samples[N];
-double FFTOutput[N/2];
-
-//attempt 3
 uint32_t real[N];
 uint32_t imag[N];
 
-//----------------------------------------------------------------------------------------------------------------
-/*
-//-------test main variables--------------------------------------------------------------------------------------------
-#define TEST_LENGTH_SAMPLES 2048
 
-
-extern float32_t testInput_f32_10khz[TEST_LENGTH_SAMPLES];
-static float32_t testOutput[TEST_LENGTH_SAMPLES/2];
-
-
-uint32_t fftSize = 1024;
-uint32_t ifftFlag = 0;
-uint32_t doBitReverse = 1;
-
-
-uint32_t refIndex = 213, testIndex = 0;
-*/
-//----------------------------------------------------------------------------------------------------------------
 
 //----------------------------------------------------------------------------------------------------------------
 //function prototypes---------------------------------------------------------------------------------------------
@@ -80,8 +55,11 @@ void initSysTickClock();
 void ADCIntHandler();
 void SysTickIntHandler();
 void debugLCD(char *s);
-//double average;
 void pwmInit();
+int fix_fft(short fr[], short fi[], short m, short inverse);
+uint32_t linear(uint32_t freq);
+void decode(int32_t val, int32_t *rgb);
+void setDutyCycles(uint32_t *rgb);
 
 //----------------------------------------------------------------------------------------------------------------
 //helper functions------------------------------------------------------------------------------------------------
@@ -211,19 +189,12 @@ void debugLCD(char *s) {
     OLEDStringDraw(s, 0, 2);
 }
 
-/*float32_t average(float32_t *array) {
-    float32_t output = 0;
-    float32_t sum = 0;
-    uint32_t size = sizeof(array) / sizeof(array[0]);
-    uint32_t i;
-    for (i = 0; i < size; i++) {
-        sum +=array[i];
-    }
-    output = sum / size;
-    return output;
-}*/
+/**********************************************************************************************
+ *                                END OF FUNCTION CODE                                        *
+ **********************************************************************************************/
 
-//------------------------------------------------------------------------------------------------------------------------
+
+
 
 
 
@@ -235,31 +206,17 @@ void main(void) {
 
 
     //Initialize variables
-    char stringF[17];
-    char stringG[17];
-    //uint32_t fftSize = 256;
-    //uint32_t doBitReverse = 1;
-    //uint32_t ifftFlag = 0;
-    //uint32_t average_frequency = 0;
-    //float32_t avgFreq = 0.0;
-    //uint32_t max;
-    //uint32_t index;
     uint32_t i;
     uint32_t sum;
     double avg = 0.0;
     double doublesum;
     uint32_t input;
     uint32_t rgb[3] = {0};
- //   arm_rfft_fast_init_f32(&S, numSamples);
 
-
-
-
-
+    //background tasks
     while (1) {
-        //background tasks
 
-        //FFT computation Block---------------------------------------------------------------------------------
+        //RGB and PWM computation Block---------------------------------------------------------------------------------
         if (!IntIsEnabled(INT_ADC0SS0)) {
             //average real data array
             sum = 0;
@@ -273,119 +230,14 @@ void main(void) {
             input = linear(input);
             decode(input, rgb);
             setDutyCycles(rgb);
-
-
-
-
-
-            // fft attempt 1---------------------------------------------------------------------
-
-  //          arm_rfft_fast_f32(&S, N_ADC_samples, FFTOutput, ifftFlag);
-            //arm_cfft_f32(&arm_cfft_sR_f32_len256, N_ADC_samples, ifftFlag, doBitReverse);
- //           arm_abs_f32(N_ADC_samples, FFTOutput, fftSize);
- //           arm_max_f32(FFTOutput, fftSize, &maxValue, &testIndex);
-          //  avgFreq = average(FFTOutput);
-          //  average_frequency= avgFreq;
-
-/*
-            //fft attempt 2----------------------------------------------------------------------
-            arm_cfft_f32(&arm_cfft_sR_f32_len256, N_ADC_samples, ifftFlag, doBitReverse);
-
-            // Process the data through the Complex Magnitude Module for
-            //calculating the magnitude at each bin
-            arm_cmplx_mag_f32(N_ADC_samples, FFTOutput, fftSize);
-
-            // Calculates maxValue and returns corresponding BIN value
-            arm_max_f32(FFTOutput, fftSize, &maxValue, &testIndex);
- */
-
-
-
-            //fft attempt 3--------------------------------------------------------------------
-            //init imag array to zero;
-/*
-            for( i=0; i<N; i++) imag[i] = 0;
-           fix_fft(real, imag, log2N, 0);
-           //get the power magnitude in each bin
-
-           for ( i = 0; i < N/2; i++) {
-               real[i] =ceil(sqrt((long)real[i] * (long)real[i] + (long)imag[i] * (long)imag[i]));
-             }
-           max = 0;
-           index = 0;
-           for (i = 1; i < N/2; i++) {
-               if (real[i] > max && real[i] < 4000000 ) {
-                   max = real[i];
-                   index = i;
-               }
-           }
-
-           uint32_t peak_freq = ((float32_t)index / (float32_t)N) * ADC_SAMPLE_RATE;
-
-
-*/
-            //debugging prints----------------------------------------------------------
-/*            usnprintf(stringF, sizeof(stringF), "ADC samp: %4d", singleADCSample[0]);
-            usnprintf(stringG, sizeof(stringG), "max-index: %4d", (uint32_t)avg);
-            OLEDStringDraw("testing ADC", 0, 0);
-
-            OLEDStringDraw(stringF, 0, 1);
-            OLEDStringDraw("testing FFT", 0, 2);
-
-            OLEDStringDraw(stringG, 0, 3);*/
-
-            //--------------------------------------------------------------------------
-
+        //-----------------------------------------------------------------------------------------------------
 
             IntEnable(INT_ADC0SS0);
 
-        //-----------------------------------------------------------------------------------------------------
-        //SysCtlDelay(66666); //delay 1/100 sec
-
+        }
 
     }
-
-}
 }
 
-    /*
-int32_t main(void){
-    initialisations();
-  arm_status status;
-  float32_t maxValue;
-
-  status = ARM_MATH_SUCCESS;
-
- //  Process the data through the CFFT/CIFFT module
-
-  arm_cfft_f32(&arm_cfft_sR_f32_len1024, testInput_f32_10khz, ifftFlag, doBitReverse);
-
-  // Process the data through the Complex Magnitude Module for
-  //calculating the magnitude at each bin
-  arm_cmplx_mag_f32(testInput_f32_10khz, testOutput, fftSize);
-
-  // Calculates maxValue and returns corresponding BIN value
-  arm_max_f32(testOutput, fftSize, &maxValue, &testIndex);
-
-  char s[17];
-  OLEDStringDraw("testing FFT", 0, 0);
-  usnprintf(s, sizeof(s), "FFT max: %3d", (uint32_t)maxValue);
-  OLEDStringDraw(s, 0, 2);
-
-  if (testIndex !=  refIndex)
-  {
-    status = ARM_MATH_TEST_FAILURE;
-  }
-
-
-  if ( status != ARM_MATH_SUCCESS)
-  {
-    while (1);
-  }
-
-  while (1);
-}
-
-*/
 
 
